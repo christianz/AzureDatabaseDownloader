@@ -103,18 +103,21 @@ namespace AzureDatabaseDownloader
 
                 local.ImportBacpac(pk, db, spec);
 
-                using (var sqlConn = new SqlConnection(DestinationConnectionString))
-                using (var loginCmd = new SqlCommand(string.Format("CREATE USER [{0}] FOR LOGIN [{0}]; ALTER ROLE [db_owner] ADD MEMBER [{0}]", selectedProfile.LocalDbUser, db), sqlConn))
+                if (!string.IsNullOrEmpty(selectedProfile.LocalDbUser))
                 {
-                    sqlConn.Open();
+                    using (var sqlConn = new SqlConnection(DestinationConnectionString))
+                    using (var loginCmd = new SqlCommand(string.Format("CREATE USER [{0}] FOR LOGIN [{0}]; ALTER ROLE [db_owner] ADD MEMBER [{0}]", selectedProfile.LocalDbUser, db), sqlConn))
+                    {
+                        sqlConn.Open();
 
-                    try
-                    {
-                        loginCmd.ExecuteNonQuery();
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"WARNING: Couldn't add user {selectedProfile.LocalDbUser} because: {ex.Message}");
+                        try
+                        {
+                            loginCmd.ExecuteNonQuery();
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"WARNING: Couldn't add user {selectedProfile.LocalDbUser} because: {ex.Message}");
+                        }
                     }
                 }
 
