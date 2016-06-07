@@ -1,6 +1,8 @@
 # Azure Database Downloader
 
-Copies databases from selected Azure database server. Useful for fetching copies of Azure databases for testing purposes.
+Export .bacpac files from Azure databases and imports them to another server (usually localhost). Useful for fetching copies of Azure databases for testing purposes.
+
+Supports exporting/importing several databases at a time. Keeps backups of the databases on your local file system.
 
 ## Usage
 
