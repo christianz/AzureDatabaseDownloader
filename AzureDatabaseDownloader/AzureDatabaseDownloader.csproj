@@ -7,8 +7,8 @@
     <ProjectGuid>{94F9D503-8809-4741-827E-7D50B0409D97}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>ExportDatabaseFromAzure</RootNamespace>
-    <AssemblyName>ExportDatabaseFromAzure</AssemblyName>
+    <RootNamespace>AzureDatabaseDownloader</RootNamespace>
+    <AssemblyName>AzureDatabaseDownloader</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>

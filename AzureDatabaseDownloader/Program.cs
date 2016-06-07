@@ -7,7 +7,7 @@ using System.Linq;
 using System.Reflection;
 using Microsoft.SqlServer.Dac;
 
-namespace ExportDatabaseFromAzure
+namespace AzureDatabaseDownloader
 {
     class Program
     {

@@ -1,4 +1,4 @@
-﻿namespace ExportDatabaseFromAzure.ProjectProfiles
+﻿namespace AzureDatabaseDownloader.ProjectProfiles
 {
     internal class SampleProfile : ProjectProfile
     {

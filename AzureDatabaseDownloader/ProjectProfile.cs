@@ -1,4 +1,4 @@
-﻿namespace ExportDatabaseFromAzure
+﻿namespace AzureDatabaseDownloader
 {
     internal abstract class ProjectProfile
     {
