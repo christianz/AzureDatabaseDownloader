@@ -234,3 +234,8 @@ _Pvt_Extensions
 
 # FAKE - F# Make
 .fake/
+/AzureDatabaseDownloader/ProjectProfiles/Vannsalg.cs
+/AzureDatabaseDownloader/ProjectProfiles/RManager.cs
+/AzureDatabaseDownloader/ProjectProfiles/Nibbler.cs
+/AzureDatabaseDownloader/ProjectProfiles/MaritimeProtection.cs
+/AzureDatabaseDownloader/ProjectProfiles/Isbre.cs
