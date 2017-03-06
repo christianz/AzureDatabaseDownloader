@@ -75,7 +75,21 @@ namespace AzureDatabaseDownloader
                     Console.WriteLine($"[{db}] {eventArgs.Message}");
                 };
 
-                dac.ExportBacpac(localFilePath, db, DacSchemaModelStorageType.File);
+                try
+                {
+                    dac.ExportBacpac(localFilePath, db, DacSchemaModelStorageType.File);
+                }
+                catch (DacServicesException dex)
+                {
+                    if (dex.InnerException == null)
+                        throw;
+
+                    throw new DacServicesException(dex.InnerException.Message, dex);
+                }
+                catch (Exception)
+                {
+                    throw;
+                }
 
                 Console.WriteLine($"[{db}] Export completed");
 

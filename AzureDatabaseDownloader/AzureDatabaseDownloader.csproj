@@ -77,11 +77,19 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="ProjectProfile.cs" />
+    <Compile Include="ProjectProfiles\ATime.cs" />
+    <Compile Include="ProjectProfiles\Isbre.cs" />
+    <Compile Include="ProjectProfiles\MaritimeProtection.cs" />
+    <Compile Include="ProjectProfiles\Nibbler.cs" />
+    <Compile Include="ProjectProfiles\RManager.cs" />
     <Compile Include="ProjectProfiles\SampleProfile.cs" />
+    <Compile Include="ProjectProfiles\Vannsalg.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="App.config" />
+    <None Include="App.config">
+      <SubType>Designer</SubType>
+    </None>
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>

@@ -4888,6 +4888,11 @@
             Names should be escaped if not doing so would cause errors
             </summary>
         </member>
+        <member name="T:Microsoft.SqlServer.Dac.Model.ModelAnnotationPropertyContext">
+            <summary>
+            Property context for properties that are converted from annotations in the internal model.
+            </summary>
+        </member>
         <member name="T:Microsoft.SqlServer.Dac.Model.ExternalDefinitionMetadataContext">
             <summary>
             <see cref="T:Microsoft.SqlServer.Dac.Model.ModelMetadataContext"/> implementation that handles external definition actions. These
@@ -5088,14 +5093,12 @@
             <param name="y">Target object.</param>
             <returns></returns>
         </member>
-        <member name="M:Microsoft.SqlServer.Dac.Model.InternalModelUtils.IsInlineConstraintOrIndex(Microsoft.Data.Tools.Schema.SchemaModel.IModelElement,System.Boolean)">
+        <member name="M:Microsoft.SqlServer.Dac.Model.InternalModelUtils.IsInlineConstraintOrIndex(Microsoft.Data.Tools.Schema.SchemaModel.IModelElement)">
             <summary>
             Checks if an internal element represents an inline constraint or annotation
             </summary>
             <param name="element">The element to check</param>
-            <param name="includeNamedInlineConstraints">Should we include named constraints in our treatment of
-            inlined constraints?</param>
-            <returns></returns>
+            <returns>True if the element is an inline constraint or index. False otherwise.</returns>
         </member>
         <member name="M:Microsoft.SqlServer.Dac.Model.InternalModelUtils.TryGetSingleReferencedElementInfo(Microsoft.Data.Tools.Schema.SchemaModel.ModelRelationshipClass,Microsoft.Data.Tools.Schema.SchemaModel.IModelElement,Microsoft.Data.Tools.Schema.SchemaModel.IModelElement@,Microsoft.Data.Tools.Schema.SchemaModel.ModelIdentifier@)">
             <summary>
@@ -5473,7 +5476,7 @@
             Loads references, SqlCmd variables, and refactor log data from a dacpac
             </summary>
         </member>
-        <member name="M:Microsoft.SqlServer.Dac.Model.TSqlObjectService.ConvertToScriptedModel">
+        <member name="M:Microsoft.SqlServer.Dac.Model.TSqlObjectService.ConvertToScriptedModel(System.Threading.CancellationToken)">
             <summary>
             Converts objects in a given scope into scriptable objects by deleting the internal representation of
             user defined objects and recreating them with a script-backed representation
@@ -5571,21 +5574,21 @@
             Gets source info from an internal source by stripping any cache ID info from the source name
             </summary>
         </member>
-        <member name="M:Microsoft.SqlServer.Dac.Model.SqlSchemaModelObjectService.ConvertToScriptedModel">
+        <member name="M:Microsoft.SqlServer.Dac.Model.SqlSchemaModelObjectService.ConvertToScriptedModel(System.Threading.CancellationToken)">
             <summary>
             Converts all user-defined objects in the model into scripted representations of themselves. This is done
             by scripting out the elements we're going to drop, then dropping all these elements, and finally adding them
             back in and resolving the model
             </summary>
         </member>
-        <member name="M:Microsoft.SqlServer.Dac.Model.SqlSchemaModelObjectService.CollectObjectsToBeRecreated(System.Collections.Generic.Dictionary{System.String,System.Tuple{Microsoft.SqlServer.Dac.Model.TSqlObject,System.String}})">
+        <member name="M:Microsoft.SqlServer.Dac.Model.SqlSchemaModelObjectService.CollectObjectsToBeRecreated(System.Collections.Generic.Dictionary{System.String,System.Tuple{Microsoft.SqlServer.Dac.Model.TSqlObject,System.String}},System.Threading.CancellationToken)">
             <summary>
             One step in converting objects to a scripted model: Must create script representations of each object to be deleted, 
             since we would like to remove them all and re-add them with only one Resolve operation. Otherwise we would have to 
             resolve after each delete and recreation to avoid unresolved references causing problems during scripting
             </summary>
         </member>
-        <member name="M:Microsoft.SqlServer.Dac.Model.SqlSchemaModelObjectService.DropAndRecreateElements(System.Collections.Generic.Dictionary{System.String,System.Tuple{Microsoft.SqlServer.Dac.Model.TSqlObject,System.String}})">
+        <member name="M:Microsoft.SqlServer.Dac.Model.SqlSchemaModelObjectService.DropAndRecreateElements(System.Collections.Generic.Dictionary{System.String,System.Tuple{Microsoft.SqlServer.Dac.Model.TSqlObject,System.String}},System.Threading.CancellationToken)">
             <summary>
             One step in converting objects to a scripted model: 
             for each of the objects to be dropped and recreated the element, its composed children and inline hierarchical 
@@ -5680,6 +5683,107 @@
         <member name="P:Microsoft.SqlServer.Dac.Model.SqlSchemaModelObjectService.ScopeFilter.QueryFilter">
             <summary>
             filter used when retrieving element
+            </summary>
+        </member>
+        <member name="T:Microsoft.SqlServer.Dac.Model.ModelExtractOptions">
+            <summary>
+            Defines options that affect the behavior of loading a model from a database.
+            </summary>
+        </member>
+        <member name="M:Microsoft.SqlServer.Dac.Model.ModelExtractOptions.#ctor">
+            <summary>
+            Construct a new instance of the <see cref="T:Microsoft.SqlServer.Dac.Model.ModelExtractOptions"/> class.
+            </summary>
+        </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.ModelExtractOptions.ExtractReferencedServerScopedElements">
+            <summary>
+            Get or set boolean that specifies whether server-scoped elements referenced by the source should be extracted.
+            </summary>
+            <value>
+            True if references server-scoped elements should be extracted; otherwise false.
+            Default value is true.
+            </value>
+        </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.ModelExtractOptions.ExtractApplicationScopedObjectsOnly">
+            <summary>
+            Get or set boolean that specifies the scope of objects extracted from the source.
+            </summary>
+            <value>
+            True if only application-scoped objects should be extracted;
+            otherwise false to extract all object types.
+            Default value is true.
+            </value>
+        </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.ModelExtractOptions.IgnoreExtendedProperties">
+            <summary>
+            Get or set boolean that specifies whether extended properties should be ignored.
+            </summary>
+            <value>
+            True if extended properties will be ignored; otherwise false.
+            Default value is false.
+            </value>
+        </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.ModelExtractOptions.IgnorePermissions">
+            <summary>
+            Get or set boolean that specifies whether permissions should be ignored.
+            </summary>
+            <value>
+            True if permissions will be ignored; otherwise false.
+            Default value is true.
+            </value>
+        </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.ModelExtractOptions.IgnoreUserLoginMappings">
+            <summary>
+            Get or set boolean that specifies whether mappings between users and logins should be extracted from the source.
+            </summary>
+            <value>
+            True if user login mappings will be ignored; otherwise false.
+            Default value is false.
+            </value>
+        </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.ModelExtractOptions.Storage">
+            <summary>
+            Get the type of backing storage for the schema model used during extraction.
+            </summary>
+            <value>
+            Enumeration value that specifies the type of backing storage for the schema model used during extraction.
+            Default value is File.
+            </value>
+        </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.ModelExtractOptions.VerifyExtraction">
+            <summary>
+            Get or set boolean that specifies whether the extracted package should be verified.
+            </summary>
+            <value>
+            True if the package should be verified; otherwise false.
+            Default value is false.
+            </value> 
+        </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.ModelExtractOptions.LoadAsScriptBackedModel">
+            <summary>
+            Should the model be loaded so that objects are backed up by scripted representations? In this case objects in the 
+            <see cref="F:Microsoft.SqlServer.Dac.Model.DacQueryScopes.UserDefined"/> scope will have a source name and source position information. 
+            
+            When loading from a Dacpac or any other non-scripted source the model will not have source information. This
+            means that when running static code analysis using the <see cref="T:Microsoft.SqlServer.Dac.CodeAnalysis.CodeAnalysisService"/> some rules may not work 
+            correctly, and that existing objects in the model could not be replaced using the 
+            <see cref="M:Microsoft.SqlServer.Dac.Model.TSqlModel.AddOrUpdateObjects(System.String,System.String,Microsoft.SqlServer.Dac.Model.TSqlObjectOptions)"/> method since there
+            is no script with their original definition. For scenarios that use the <see cref="T:Microsoft.SqlServer.Dac.CodeAnalysis.CodeAnalysisService"/> setting this
+            to true is strongly recommended. Similarly if you wish to update existing objects in the model setting this to true may
+            be useful.
+            
+            Note that there is a potentially significant performance cost involved in creating a scripted model. All 
+            top level objects in the <see cref="F:Microsoft.SqlServer.Dac.Model.DacQueryScopes.UserDefined"/> scope will be scripted out as strings 
+            and then replaced with their scripted representations, after which the model will then have to fully resolve all 
+            relationships. This will cause a one-time performance hit at the time the model is loaded. 
+            </summary>
+            <remarks>Default value is false, since there is a performance hit involved in creating a script-backed model from a 
+            non-scripted source</remarks>
+        </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.ModelExtractOptions.ExtractUsageProperties">
+            <summary>
+            Usage properties include Table.RowCount, Table.IndexSize, Table.DataSize, Table.UsedPages and Table.DataPages.
+            When true, these properties are extracted from the database and accessible in the model.
             </summary>
         </member>
         <member name="T:Microsoft.SqlServer.Dac.Model.ModelLoadOptions">
@@ -5787,6 +5891,11 @@
         <member name="M:Microsoft.SqlServer.Dac.Model.ModelPropertyClass.GetDefaultValue``1(Microsoft.SqlServer.Dac.Model.SqlServerVersion)">
             <summary>
             Returns the default property value.
+            
+            Note: for <see cref="F:Microsoft.SqlServer.Dac.Model.SqlServerVersion.SqlAzure"/> the default value may depend on the
+            <see cref="P:Microsoft.SqlServer.Dac.Model.TSqlModel.EngineVersion"/> being targeted. This method assumes the current default
+            version is being used. To get a default value based on a particular for a particular EngineVersion, please use
+            <see cref="M:Microsoft.SqlServer.Dac.Model.ModelPropertyClass.GetDefaultValue``1(Microsoft.SqlServer.Dac.Model.SqlServerVersion,System.Int32)"/>.
             </summary>
             <typeparam name="T"><see cref="T:System.Type"/> of the property value.</typeparam>
             <param name="version">The <see cref="T:Microsoft.SqlServer.Dac.Model.SqlServerVersion"/> to return the default value for.</param>
@@ -5798,6 +5907,11 @@
         <member name="M:Microsoft.SqlServer.Dac.Model.ModelPropertyClass.GetDefaultValue(Microsoft.SqlServer.Dac.Model.SqlServerVersion)">
             <summary>
             Returns the default property value.
+            
+            Note: for <see cref="F:Microsoft.SqlServer.Dac.Model.SqlServerVersion.SqlAzure"/> the default value may depend on the
+            <see cref="P:Microsoft.SqlServer.Dac.Model.TSqlModel.EngineVersion"/> being targeted. This method assumes the current default
+            version is being used. To get a default value based on a particular for a particular EngineVersion, please use
+            <see cref="M:Microsoft.SqlServer.Dac.Model.ModelPropertyClass.GetDefaultValue(Microsoft.SqlServer.Dac.Model.SqlServerVersion,System.Int32)"/>.
             </summary>
             <param name="version">The <see cref="T:Microsoft.SqlServer.Dac.Model.SqlServerVersion"/> to return the default value for.</param>
             <returns>Default value for specified <see cref="T:Microsoft.SqlServer.Dac.Model.SqlServerVersion"/>.</returns>        
@@ -5805,9 +5919,55 @@
         <member name="M:Microsoft.SqlServer.Dac.Model.ModelPropertyClass.IsDefaultValue(Microsoft.SqlServer.Dac.Model.TSqlObject,Microsoft.SqlServer.Dac.Model.SqlServerVersion)">
             <summary>
             Returns if the value is the platform default value.
+            
+            Note: for <see cref="F:Microsoft.SqlServer.Dac.Model.SqlServerVersion.SqlAzure"/> the default value may depend on the
+            <see cref="P:Microsoft.SqlServer.Dac.Model.TSqlModel.EngineVersion"/> being targeted. This method assumes the current default
+            version is being used. To validate the  default value based on a particular for a particular EngineVersion, please use
+            <see cref="M:Microsoft.SqlServer.Dac.Model.ModelPropertyClass.IsDefaultValue(Microsoft.SqlServer.Dac.Model.TSqlObject,Microsoft.SqlServer.Dac.Model.SqlServerVersion,System.Int32)"/>.
             </summary>
             <param name="instance"><see cref="T:Microsoft.SqlServer.Dac.Model.TSqlObject"/> instance to determine the default property value for.</param>
             <param name="version">The <see cref="T:Microsoft.SqlServer.Dac.Model.SqlServerVersion"/> to determine the default value for.</param>
+            <returns>True if the property is the platform default. Otherwise false.</returns>
+            <exception cref="T:Microsoft.SqlServer.Dac.Model.DacModelException">
+            If the supplied <paramref name="instance"/> is not the owner of this property.
+            </exception>
+        </member>
+        <member name="M:Microsoft.SqlServer.Dac.Model.ModelPropertyClass.GetDefaultValue``1(Microsoft.SqlServer.Dac.Model.SqlServerVersion,System.Int32)">
+            <summary>
+            Returns the default property value.
+            Note: for <see cref="F:Microsoft.SqlServer.Dac.Model.SqlServerVersion.SqlAzure"/> the default value may depend on the
+            <see cref="P:Microsoft.SqlServer.Dac.Model.TSqlModel.EngineVersion"/> being targeted. 
+            </summary>
+            <typeparam name="T"><see cref="T:System.Type"/> of the property value.</typeparam>
+            <param name="version">The <see cref="T:Microsoft.SqlServer.Dac.Model.SqlServerVersion"/> to return the default value for.</param>
+            <param name="engineVersion">
+            Optional value for the engine version. This maps to the
+            <see cref="P:Microsoft.SqlServer.Dac.Model.TSqlModel.EngineVersion"/> property on a model.
+            </param>
+            <returns>Default value for specified <see cref="T:Microsoft.SqlServer.Dac.Model.SqlServerVersion"/>.</returns>
+            <exception cref="T:System.InvalidCastException">
+            If the property value cannot be cast to <typeparamref name="T"/>.
+            </exception>
+        </member>
+        <member name="M:Microsoft.SqlServer.Dac.Model.ModelPropertyClass.GetDefaultValue(Microsoft.SqlServer.Dac.Model.SqlServerVersion,System.Int32)">
+            <summary>
+            Returns the default property value.
+            </summary>
+            <param name="version">The <see cref="T:Microsoft.SqlServer.Dac.Model.SqlServerVersion"/> to return the default value for.</param>
+            <param name="engineVersion">
+            Optional value for the engine version. This maps to the <see cref="P:Microsoft.SqlServer.Dac.Model.TSqlModel.EngineVersion"/> property on a model.
+            </param>
+            <returns>Default value for specified <see cref="T:Microsoft.SqlServer.Dac.Model.SqlServerVersion"/>.</returns>        
+        </member>
+        <member name="M:Microsoft.SqlServer.Dac.Model.ModelPropertyClass.IsDefaultValue(Microsoft.SqlServer.Dac.Model.TSqlObject,Microsoft.SqlServer.Dac.Model.SqlServerVersion,System.Int32)">
+            <summary>
+            Returns if the value is the platform default value.
+            </summary>
+            <param name="instance"><see cref="T:Microsoft.SqlServer.Dac.Model.TSqlObject"/> instance to determine the default property value for.</param>
+            <param name="version">The <see cref="T:Microsoft.SqlServer.Dac.Model.SqlServerVersion"/> to determine the default value for.</param>
+            <param name="engineVersion">
+            Optional value for the engine version. This maps to the <see cref="P:Microsoft.SqlServer.Dac.Model.TSqlModel.EngineVersion"/> property on a model.
+            </param>
             <returns>True if the property is the platform default. Otherwise false.</returns>
             <exception cref="T:Microsoft.SqlServer.Dac.Model.DacModelException">
             If the supplied <paramref name="instance"/> is not the owner of this property.
@@ -6006,6 +6166,11 @@
         <member name="F:Microsoft.SqlServer.Dac.Model.ModelSchema.ScalarFunction">
             <summary>
             Model type class for ScalarFunction
+            </summary>
+        </member>
+        <member name="F:Microsoft.SqlServer.Dac.Model.ModelSchema.ClrTableOption">
+            <summary>
+            Model type class for ClrTableOption
             </summary>
         </member>
         <member name="F:Microsoft.SqlServer.Dac.Model.ModelSchema.Aggregate">
@@ -10913,9 +11078,9 @@
             Assembly relationship class of TableValuedFunction
             </summary>
         </member>
-        <member name="P:Microsoft.SqlServer.Dac.Model.TableValuedFunction.OrderColumns">
+        <member name="P:Microsoft.SqlServer.Dac.Model.TableValuedFunction.TableOption">
             <summary>
-            OrderColumns relationship class of TableValuedFunction
+            TableOption relationship class of TableValuedFunction
             </summary>
         </member>
         <member name="P:Microsoft.SqlServer.Dac.Model.TableValuedFunction.ReturnType">
@@ -10926,6 +11091,11 @@
         <member name="P:Microsoft.SqlServer.Dac.Model.TableValuedFunction.BodyDependencies">
             <summary>
             BodyDependencies relationship class of TableValuedFunction
+            </summary>
+        </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.TableValuedFunction.Columns">
+            <summary>
+            Columns relationship class of TableValuedFunction
             </summary>
         </member>
         <member name="P:Microsoft.SqlServer.Dac.Model.TableValuedFunction.Login">
@@ -10946,21 +11116,6 @@
         <member name="P:Microsoft.SqlServer.Dac.Model.TableValuedFunction.User">
             <summary>
             User relationship class of TableValuedFunction
-            </summary>
-        </member>
-        <member name="T:Microsoft.SqlServer.Dac.Model.TableValuedFunction.OrderColumnsRelationship">
-            <summary>
-            Model schema container class for OrderColumnsRelationship
-            </summary>
-        </member>
-        <member name="P:Microsoft.SqlServer.Dac.Model.TableValuedFunction.OrderColumnsRelationship.RelationshipClass">
-            <summary>
-            Relationship class for OrderColumnsRelationship
-            </summary>
-        </member>
-        <member name="P:Microsoft.SqlServer.Dac.Model.TableValuedFunction.OrderColumnsRelationship.Ascending">
-            <summary>
-            Ascending property class of OrderColumnsRelationship
             </summary>
         </member>
         <member name="T:Microsoft.SqlServer.Dac.Model.ScalarFunction">
@@ -11091,6 +11246,41 @@
         <member name="P:Microsoft.SqlServer.Dac.Model.ScalarFunction.User">
             <summary>
             User relationship class of ScalarFunction
+            </summary>
+        </member>
+        <member name="T:Microsoft.SqlServer.Dac.Model.ClrTableOption">
+            <summary>
+            Model schema container class for ClrTableOption
+            </summary>
+        </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.ClrTableOption.TypeClass">
+            <summary>
+            Type class for ClrTableOption
+            </summary>
+        </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.ClrTableOption.ClassName">
+            <summary>
+            ClassName property class of ClrTableOption
+            </summary>
+        </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.ClrTableOption.OrderColumns">
+            <summary>
+            OrderColumns relationship class of ClrTableOption
+            </summary>
+        </member>
+        <member name="T:Microsoft.SqlServer.Dac.Model.ClrTableOption.OrderColumnsRelationship">
+            <summary>
+            Model schema container class for OrderColumnsRelationship
+            </summary>
+        </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.ClrTableOption.OrderColumnsRelationship.RelationshipClass">
+            <summary>
+            Relationship class for OrderColumnsRelationship
+            </summary>
+        </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.ClrTableOption.OrderColumnsRelationship.Ascending">
+            <summary>
+            Ascending property class of OrderColumnsRelationship
             </summary>
         </member>
         <member name="T:Microsoft.SqlServer.Dac.Model.Aggregate">
@@ -15348,6 +15538,31 @@
             MemoryOptimized property class of Table
             </summary>
         </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.Table.RowCount">
+            <summary>
+            RowCount property class of Table
+            </summary>
+        </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.Table.DataSize">
+            <summary>
+            DataSize property class of Table
+            </summary>
+        </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.Table.IndexSize">
+            <summary>
+            IndexSize property class of Table
+            </summary>
+        </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.Table.DataPages">
+            <summary>
+            DataPages property class of Table
+            </summary>
+        </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.Table.UsedPages">
+            <summary>
+            UsedPages property class of Table
+            </summary>
+        </member>
         <member name="P:Microsoft.SqlServer.Dac.Model.Table.Durability">
             <summary>
             Durability property class of Table
@@ -16629,6 +16844,47 @@
             the package are not found using the original path to the reference.
             </exception>
         </member>
+        <member name="M:Microsoft.SqlServer.Dac.Model.TSqlModel.LoadFromDacpac(System.IO.Stream,Microsoft.SqlServer.Dac.Model.ModelLoadOptions,System.Threading.CancellationToken)">
+            <summary>
+            Loads a model from a <see cref="T:Microsoft.SqlServer.Dac.DacPackage"/> or <see cref="T:Microsoft.SqlServer.Dac.BacPackage"/>
+            using the specified <paramref name="options"/> to configure what kind of storage to use, and whether to load a script-backed
+            model or not.
+            </summary>
+            <param name="dacpacStream">A stream that contains the serialized dacpac.</param>
+            <param name="options">
+            The <see cref="T:Microsoft.SqlServer.Dac.Model.ModelLoadOptions"/> defining how the model should be loaded. For models to be analyzed in static code analysis,
+            it's recommended that the <see cref="P:Microsoft.SqlServer.Dac.Model.ModelLoadOptions.LoadAsScriptBackedModel"/> be set to true. This is important since some
+            rules may not work as expected unless this is true.
+            </param>
+            <param name="cancellationToken">A token used for cancelling model loading.</param>
+            <exception cref="T:System.OperationCanceledException">When the load operation is canceled.</exception>
+            <exception cref="T:Microsoft.SqlServer.Dac.Model.DacModelException">
+            If there are problems loading the package from the specified <paramref name="dacpacStream"/>. 
+            This may occur if the package does not load correctly or if references required by
+            the package are not found using the original path to the reference.
+            </exception>
+        </member>
+        <member name="M:Microsoft.SqlServer.Dac.Model.TSqlModel.LoadFromDacpac(System.String,Microsoft.SqlServer.Dac.Model.ModelLoadOptions,System.Threading.CancellationToken)">
+            <summary>
+            Loads a model from a <see cref="T:Microsoft.SqlServer.Dac.DacPackage"/> or <see cref="T:Microsoft.SqlServer.Dac.BacPackage"/>
+            using the specified <paramref name="options"/> to configure what kind of storage to use, and whether to load a script-backed
+            model or not.
+            </summary>
+            <param name="fileName">File path to package.</param> 
+            <param name="options">
+            The <see cref="T:Microsoft.SqlServer.Dac.Model.ModelLoadOptions"/> defining how the model should be loaded. For models to be analyzed in static code analysis,
+            it's recommended that the <see cref="P:Microsoft.SqlServer.Dac.Model.ModelLoadOptions.LoadAsScriptBackedModel"/> be set to true. This is important since some
+            rules may not work as expected unless this is true.
+            </param>
+            <param name="cancellationToken">A token used for cancelling model loading.</param>
+            <exception cref="T:System.OperationCanceledException">When the load operation is canceled.</exception>
+            <exception cref="T:Microsoft.SqlServer.Dac.Model.DacModelException">
+            If there are problems loading the package from the specified <paramref name="fileName"/>. 
+            This may occur if the package does not load correctly or if references required by
+            the package are not found in either the same directory as the package, or using the original path
+            to the reference.
+            </exception>
+        </member>
         <member name="M:Microsoft.SqlServer.Dac.Model.TSqlModel.LoadFromDacpac(System.String,Microsoft.SqlServer.Dac.Model.ModelLoadOptions)">
             <summary>
             Loads a model from a <see cref="T:Microsoft.SqlServer.Dac.DacPackage"/> or <see cref="T:Microsoft.SqlServer.Dac.BacPackage"/>
@@ -16646,6 +16902,24 @@
             This may occur if the package does not load correctly or if references required by
             the package are not found in either the same directory as the package, or using the original path
             to the reference.
+            </exception>
+        </member>
+        <member name="M:Microsoft.SqlServer.Dac.Model.TSqlModel.LoadFromDatabase(System.String,Microsoft.SqlServer.Dac.Model.ModelExtractOptions,System.Nullable{System.Threading.CancellationToken})">
+            <summary>
+            Loads a model from a database using the specified <paramref name="options"/>.
+            </summary>
+            <param name="connectionString">A connection string specifying the database and catalog to load.</param>
+            <param name="options">
+            Optional <see cref="T:Microsoft.SqlServer.Dac.Model.ModelExtractOptions"/> instance used to specify options that affect the behavior of package extraction.
+            For models to be analyzed in static code analysis, it's recommended that the 
+            <see cref="P:Microsoft.SqlServer.Dac.Model.ModelExtractOptions.LoadAsScriptBackedModel"/> be set to true. This is important since some
+            rules may not work as expected unless this is true.</param> 
+            <param name="cancellationToken">Optional cancellation token used to cancel a load operation.</param>
+            <exception cref="T:System.ArgumentNullException">If connectionString is null.</exception>
+            <exception cref="T:System.ArgumentException">If connectionString is not a valid connection string
+            or options.Storage is not a valid value of the enumerated type.</exception>
+            <exception cref="T:Microsoft.SqlServer.Dac.DacServicesException">
+            If there are problems extracting the model from the specified database. 
             </exception>
         </member>
         <member name="M:Microsoft.SqlServer.Dac.Model.TSqlModel.#ctor(System.String)">
@@ -16690,6 +16964,31 @@
             the package are not found in either the same directory as the package, or using the original path
             to the reference.
             </exception>
+        </member>
+        <member name="M:Microsoft.SqlServer.Dac.Model.TSqlModel.#ctor(System.String,Microsoft.SqlServer.Dac.DacSchemaModelStorageType,System.Threading.CancellationToken)">
+            <summary>
+            Loads a model from a <see cref="T:Microsoft.SqlServer.Dac.DacPackage"/> or <see cref="T:Microsoft.SqlServer.Dac.BacPackage"/>.
+            
+            This is equivalent to calling <see cref="M:Microsoft.SqlServer.Dac.Model.TSqlModel.LoadFromDacpac(System.String,Microsoft.SqlServer.Dac.Model.ModelLoadOptions)"/> with default values for
+            everything except the <paramref name="modelStorageType"/>.
+            </summary>
+            <param name="fileName">File path to package.</param>
+            <param name="modelStorageType">
+            Backing storage type for package instance.
+            </param>
+            <param name="cancellationToken">A token used for cancelling model loading.</param>
+            <remarks>
+            The dacpac model will not be script backed as the <see cref="P:Microsoft.SqlServer.Dac.Model.ModelLoadOptions.LoadAsScriptBackedModel"/> will be set to false.
+            Using <see cref="M:Microsoft.SqlServer.Dac.Model.TSqlModel.LoadFromDacpac(System.String,Microsoft.SqlServer.Dac.Model.ModelLoadOptions)"/> with <see cref="P:Microsoft.SqlServer.Dac.Model.ModelLoadOptions.LoadAsScriptBackedModel"/>
+            set to true is recommended if the model will be used by the <see cref="T:Microsoft.SqlServer.Dac.CodeAnalysis.CodeAnalysisService"/> for static code analysis.
+            </remarks>
+            <exception cref="T:Microsoft.SqlServer.Dac.Model.DacModelException">
+            If there are problems loading the package from the specified <paramref name="fileName"/>. 
+            This may occur if the package does not load correctly or if references required by
+            the package are not found in either the same directory as the package, or using the original path
+            to the reference.
+            </exception>
+            <exception cref="T:System.OperationCanceledException">When the load operation is canceled.</exception>
         </member>
         <member name="M:Microsoft.SqlServer.Dac.Model.TSqlModel.#ctor(Microsoft.SqlServer.Dac.Model.SqlServerVersion,Microsoft.SqlServer.Dac.Model.TSqlModelOptions)">
             <summary>
@@ -16956,6 +17255,17 @@
             The specific SQL Server release targeted by the model.
             </summary>
         </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.TSqlModel.EngineVersion">
+            <summary>
+            The specific engine version targeted by the model.
+            
+            For On Premises platforms this will be consistent with the <see cref="T:Microsoft.SqlServer.Dac.Model.SqlServerVersion"/> - for instance
+            <see cref="F:Microsoft.SqlServer.Dac.Model.SqlServerVersion.Sql90"/> will have an engine version of 9.
+            
+            For Microsoft Azure SQL Database the minimum valid version is 11, and the engine version will affect
+            what features are supported in the model.  
+            </summary>
+        </member>
         <member name="P:Microsoft.SqlServer.Dac.Model.TSqlModel.IsScriptBacked">
             <summary>
             Is this a model that is backed by scripts? In this case objects in the 
@@ -16992,6 +17302,16 @@
         <member name="M:Microsoft.SqlServer.Dac.Model.TSqlModelOptions.#ctor">
             <summary>
             Constructs the TSqlModelOptions
+            </summary>
+        </member>
+        <member name="M:Microsoft.SqlServer.Dac.Model.TSqlModelOptions.#ctor(Microsoft.SqlServer.Dac.Model.TSqlModelOptions)">
+            <summary>
+            Constructs the TSqlModelOptions based on an existing options object
+            </summary>
+        </member>
+        <member name="M:Microsoft.SqlServer.Dac.Model.TSqlModelOptions.Copy(Microsoft.SqlServer.Dac.Model.TSqlModelOptions,Microsoft.SqlServer.Dac.Model.TSqlModelOptions)">
+            <summary>
+            Copies deployment options between objects.
             </summary>
         </member>
         <member name="P:Microsoft.SqlServer.Dac.Model.TSqlModelOptions.Collation">
@@ -17215,6 +17535,14 @@
         <member name="P:Microsoft.SqlServer.Dac.Model.TSqlModelOptions.ServiceBrokerOption">
             <summary>
             Specifies the ENABLE_BROKER | DISABLE_BROKER | NEW_BROKER | ERROR_BROKER_CONVERSATIONS database option.
+            </summary>
+        </member>
+        <member name="P:Microsoft.SqlServer.Dac.Model.TSqlModelOptions.EngineVersion">
+            <summary>
+            Specifies what engine version should be targeted by the model.
+            For On Premises platforms this value will be ignored as the engine version is fixed based on the platform.
+            For the <see cref="F:Microsoft.SqlServer.Dac.Model.SqlServerVersion.SqlAzure"/> platform this value will be set and used
+            to specify what T-SQL language features are supported. 
             </summary>
         </member>
         <member name="P:Microsoft.SqlServer.Dac.Model.TSqlModelOptions.SupplementalLoggingOn">
@@ -17774,7 +18102,7 @@
         </member>
         <member name="F:Microsoft.SqlServer.Dac.Model.TSqlPlatforms.SqlAzure">
             <summary>
-            Azure
+            Microsoft Azure SQL Database, version 11
             </summary>
         </member>
         <member name="F:Microsoft.SqlServer.Dac.Model.TSqlPlatforms.Sql110">
@@ -17787,9 +18115,19 @@
             on-premises, version 12.0
             </summary>
         </member>
+        <member name="F:Microsoft.SqlServer.Dac.Model.TSqlPlatforms.SqlAzureV12">
+            <summary>
+            Microsoft Azure SQL Database, version 12
+            </summary>
+        </member>
         <member name="F:Microsoft.SqlServer.Dac.Model.TSqlPlatforms.OnPremises">
             <summary>
-            Categories of SQL Server releases
+            All on-premises versions
+            </summary>
+        </member>
+        <member name="F:Microsoft.SqlServer.Dac.Model.TSqlPlatforms.Cloud">
+            <summary>
+            All cloud releases
             </summary>
         </member>
         <member name="F:Microsoft.SqlServer.Dac.Model.TSqlPlatforms.All">
