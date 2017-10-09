@@ -120,7 +120,7 @@ namespace AzureDatabaseDownloader
                 if (!string.IsNullOrEmpty(selectedProfile.LocalDbUser))
                 {
                     using (var sqlConn = new SqlConnection(DestinationConnectionString))
-                    using (var loginCmd = new SqlCommand(string.Format("CREATE USER [{0}] FOR LOGIN [{0}]; ALTER ROLE [db_owner] ADD MEMBER [{0}]", selectedProfile.LocalDbUser, db), sqlConn))
+                    using (var loginCmd = new SqlCommand(string.Format("USE [{1}]; CREATE USER [{0}] FOR LOGIN [{0}]; USE [{1}]; ALTER ROLE [db_owner] ADD MEMBER [{0}];", selectedProfile.LocalDbUser, db), sqlConn))
                     {
                         sqlConn.Open();
 
