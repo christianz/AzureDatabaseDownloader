@@ -4,31 +4,95 @@ using System.Configuration;
 using System.Data.SqlClient;
 using System.IO;
 using System.Linq;
-using System.Reflection;
+using CommandLine;
 using Microsoft.SqlServer.Dac;
 
 namespace AzureDatabaseDownloader
 {
     class Program
     {
-        private static readonly string DestinationConnectionString = ConfigurationManager.ConnectionStrings["LocalConnectionString"].ConnectionString;
-        private static readonly string LocalDbContainer = ConfigurationManager.AppSettings["LocalDbFolder"];
+        [Verb("interactive", HelpText = "Interactive mode")]
+        class InteractiveOptions { }
 
-        private static List<ProjectProfile> _profiles;
+        [Verb("db2db", HelpText = "Database-to-database sync (n:n)")]
+        class Db2dbOptions
+        {
+            [Option('i', "input", Required = true, HelpText = "Input database connection string")]
+            public string InputConnectionString { get; set; }
+
+            [Option('o', "output", Required = true, HelpText = "Output database connection string")]
+            public string OutputConnectionString { get; set; }
+
+            [Option('d', "databases", Required = true, HelpText = "Databases to sync (can be more than 1)", Separator = ',')]
+            public string[] Databases { get; set; }
+
+            [Option('w', "working-dir", Required = false, HelpText = "Working directory (current directory is default)")]
+            public string WorkingDirectory { get; set; }
+
+            [Option('u', "local-user", Required = false, HelpText = "Local user to give db_owner access after sync")]
+            public string LocalUser { get; set; }
+        }
+
+        [Verb("db2f", HelpText = "Database-to-file sync (1:1)")]
+        class Db2fOptions
+        {
+            [Option('i', "input", Required = true, HelpText = "Input database connection string")]
+            public string InputConnectionString { get; set; }
+
+            [Option('o', "output-file", Required = true, HelpText = "Output file (.bacpac format)")]
+            public string OutputFile { get; set; }
+            
+            [Option('w', "working-dir", Required = false, HelpText = "Working directory (current directory is default)")]
+            public string WorkingDirectory { get; set; }
+
+            [Option('d', "database", Required = true, HelpText = "Database to sync")]
+            public string Database { get; set; }
+        }
+
+        [Verb("f2db", HelpText = "File-to-database sync (1:1)")]
+        class F2dbOptions
+        {
+            [Option('i', "input-file", Required = true, HelpText = "Input file (.bacpac format)")]
+            public string InputFile { get; set; }
+
+            [Option('o', "output", Required = true, HelpText = "Output database connection string")]
+            public string OutputConnectionString { get; set; }
+            
+            [Option('w', "working-dir", Required = false, HelpText = "Working directory (current directory is default)")]
+            public string WorkingDirectory { get; set; }
+
+            [Option('d', "database", Required = true, HelpText = "Database to sync")]
+            public string Database { get; set; }
+
+            [Option('u', "local-user", Required = false, HelpText = "Local user to give db_owner access after sync")]
+            public string LocalUser { get; set; }
+        }
 
         static void Main(string[] args)
         {
-            _profiles = LoadProjectProfiles().Where(p => p.IsActive).ToList();
+            var parseResult = Parser.Default.ParseArguments<InteractiveOptions, Db2dbOptions, Db2fOptions, F2dbOptions>(args);
 
+            parseResult.MapResult(
+                (InteractiveOptions opts) => InteractiveSync(opts),
+                (Db2dbOptions opts) => DatabaseToDatabaseSync(opts),
+                (Db2fOptions opts) => DatabaseToFileSync(opts),
+                (F2dbOptions opts) => FileToDatabaseSync(opts),
+                errs => 1);
+        }
+
+        private static int InteractiveSync(InteractiveOptions opts)
+        {
+            // Interactive mode
             Console.WriteLine("--- WARNING ---");
             Console.WriteLine("Local databases for the selected profile will be overwritten! Ctrl+C out NOW if you'd like to keep them!");
             Console.WriteLine();
 
             Console.WriteLine("Select project profile to run:");
             var i = 1;
-            int selectedIdx;
 
-            foreach (var p in _profiles)
+            var profiles = ProjectProfile.List().ToList();
+
+            foreach (var p in profiles)
             {
                 Console.WriteLine($"[{i++}] {p.Name}");
             }
@@ -37,115 +101,154 @@ namespace AzureDatabaseDownloader
 
             var k = Console.ReadKey();
 
-            if (!int.TryParse(k.KeyChar.ToString(), out selectedIdx))
+            if (!int.TryParse(k.KeyChar.ToString(), out var selectedIdx))
             {
-                return;
+                return 0;
             }
 
-            if (_profiles.Count < selectedIdx)
+            if (profiles.Count < selectedIdx)
             {
-                return;
+                return 0;
             }
 
-            var selectedProfile = _profiles[selectedIdx - 1];
+            var selectedProfile = profiles[selectedIdx - 1];
 
+            DatabaseToDatabaseSync(new Db2dbOptions
+            {
+                InputConnectionString = selectedProfile.FromConnectionString,
+                OutputConnectionString = selectedProfile.ToConnectionString,
+                Databases = selectedProfile.DatabasesToSync,
+                WorkingDirectory = selectedProfile.WorkingDirectory,
+                LocalUser = selectedProfile.LocalDbUser
+            });
+
+            return 0;
+        }
+
+        private static int DatabaseToDatabaseSync(Db2dbOptions opts)
+        {
+            if (string.IsNullOrEmpty(opts.WorkingDirectory))
+            {
+                opts.WorkingDirectory = Environment.CurrentDirectory;
+            }
+
+            foreach (var db in opts.Databases)
+            {
+                var outputFile = Path.Combine(opts.WorkingDirectory, $"{db}.bacpac");
+
+                DatabaseToFileSync(new Db2fOptions
+                {
+                    InputConnectionString = opts.InputConnectionString,
+                    Database = db,
+                    OutputFile = outputFile,
+                    WorkingDirectory = opts.WorkingDirectory
+                });
+
+                FileToDatabaseSync(new F2dbOptions
+                {
+                    InputFile = outputFile,
+                    OutputConnectionString = opts.OutputConnectionString,
+                    Database = db,
+                    LocalUser = opts.LocalUser,
+                    WorkingDirectory = opts.WorkingDirectory
+                });
+            }
+
+            return 0;
+        }
+
+        private static int DatabaseToFileSync(Db2fOptions opts)
+        {
+            if (string.IsNullOrEmpty(opts.WorkingDirectory))
+            {
+                opts.WorkingDirectory = Environment.CurrentDirectory;
+            }
+
+            var azureConnectionString = opts.InputConnectionString;
+            var db = opts.Database;
+
+            Console.WriteLine($"Fetching {db}...");
             Console.WriteLine();
-            Console.WriteLine($"Syncing {selectedProfile.Name}...");
 
-            var azureConnectionString = selectedProfile.AzureConnectionString;
+            var dir = new FileInfo(opts.OutputFile).DirectoryName;
 
-            foreach (var db in selectedProfile.DatabasesToDownload)
+            if (!Directory.Exists(dir))
             {
-                Console.WriteLine($"Fetching {db}...");
-                Console.WriteLine();
+                Directory.CreateDirectory(dir);
+            }
 
-                var localFilePath = Path.Combine(LocalDbContainer, selectedProfile.Name);
+            var dac = new DacServices(azureConnectionString);
 
-                if (!Directory.Exists(localFilePath))
-                {
-                    Directory.CreateDirectory(localFilePath);
-                }
+            dac.ProgressChanged += (sender, eventArgs) => { Console.WriteLine($"[{db}] {eventArgs.Message}"); };
 
-                localFilePath = Path.Combine(localFilePath, $"{db}_{DateTime.Now.ToString("dd_MM_yyyy_HH_mm")}.bacpac");
-
-                var dac = new DacServices(azureConnectionString);
-
-                dac.ProgressChanged += (sender, eventArgs) =>
-                {
-                    Console.WriteLine($"[{db}] {eventArgs.Message}");
-                };
-
-                try
-                {
-                    dac.ExportBacpac(localFilePath, db, DacSchemaModelStorageType.File);
-                }
-                catch (DacServicesException dex)
-                {
-                    if (dex.InnerException == null)
-                        throw;
-
-                    throw new DacServicesException(dex.InnerException.Message, dex);
-                }
-                catch (Exception)
-                {
+            try
+            {
+                dac.ExportBacpac(opts.OutputFile, db, DacSchemaModelStorageType.File);
+            }
+            catch (DacServicesException dex)
+            {
+                if (dex.InnerException == null)
                     throw;
-                }
 
-                Console.WriteLine($"[{db}] Export completed");
+                throw new DacServicesException(dex.InnerException.Message, dex);
+            }
 
-                var pk = BacPackage.Load(localFilePath);
-                var spec = new DacAzureDatabaseSpecification
-                {
-                    Edition = DacAzureEdition.Basic
-                };
+            Console.WriteLine($"[{db}] Export completed");
 
-                using (var sqlConn = new SqlConnection(DestinationConnectionString))
-                using (var singleUserCmd = new SqlCommand(string.Format("IF db_id('{0}') is not null ALTER DATABASE [{0}] SET  SINGLE_USER WITH ROLLBACK IMMEDIATE", db), sqlConn))
-                using (var dropCmd = new SqlCommand(string.Format("IF db_id('{0}') is not null DROP DATABASE [{0}]", db), sqlConn))
+            return 0;
+        }
+
+        private static int FileToDatabaseSync(F2dbOptions opts)
+        {
+            if (string.IsNullOrEmpty(opts.WorkingDirectory))
+            {
+                opts.WorkingDirectory = Environment.CurrentDirectory;
+            }
+
+            var db = opts.Database;
+            var pk = BacPackage.Load(opts.InputFile);
+            var spec = new DacAzureDatabaseSpecification
+            {
+                Edition = DacAzureEdition.Basic
+            };
+
+            using (var sqlConn = new SqlConnection(opts.OutputConnectionString))
+            using (var singleUserCmd = new SqlCommand($"IF db_id('{db}') is not null ALTER DATABASE [{db}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE", sqlConn))
+            using (var dropCmd = new SqlCommand($"IF db_id('{db}') is not null DROP DATABASE [{db}]", sqlConn))
+            {
+                sqlConn.Open();
+
+                singleUserCmd.ExecuteNonQuery();
+                dropCmd.ExecuteNonQuery();
+            }
+
+            var local = new DacServices(opts.OutputConnectionString);
+            local.ProgressChanged += (sender, eventArgs) => { Console.WriteLine($"[{db}] {eventArgs.Message}"); };
+
+            local.ImportBacpac(pk, db, spec);
+
+            if (!string.IsNullOrEmpty(opts.LocalUser))
+            {
+                using (var sqlConn = new SqlConnection(opts.OutputConnectionString))
+                using (var loginCmd = new SqlCommand($"USE [{db}]; CREATE USER [{opts.LocalUser}] FOR LOGIN [{opts.LocalUser}]; USE [{db}]; ALTER ROLE [db_owner] ADD MEMBER [{opts.LocalUser}];", sqlConn))
                 {
                     sqlConn.Open();
 
-                    singleUserCmd.ExecuteNonQuery();
-                    dropCmd.ExecuteNonQuery();
-                }
-
-                var local = new DacServices(DestinationConnectionString);
-                local.ProgressChanged += (sender, eventArgs) =>
-                {
-                    Console.WriteLine($"[{db}] {eventArgs.Message}");
-                };
-
-                local.ImportBacpac(pk, db, spec);
-
-                if (!string.IsNullOrEmpty(selectedProfile.LocalDbUser))
-                {
-                    using (var sqlConn = new SqlConnection(DestinationConnectionString))
-                    using (var loginCmd = new SqlCommand(string.Format("USE [{1}]; CREATE USER [{0}] FOR LOGIN [{0}]; USE [{1}]; ALTER ROLE [db_owner] ADD MEMBER [{0}];", selectedProfile.LocalDbUser, db), sqlConn))
+                    try
                     {
-                        sqlConn.Open();
-
-                        try
-                        {
-                            loginCmd.ExecuteNonQuery();
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"WARNING: Couldn't add user {selectedProfile.LocalDbUser} because: {ex.Message}");
-                        }
+                        loginCmd.ExecuteNonQuery();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"WARNING: Couldn't add user {opts.LocalUser} because: {ex.Message}");
                     }
                 }
-
-                Console.Write("done.");
-                Console.WriteLine();
             }
-        }
 
-        private static IEnumerable<ProjectProfile> LoadProjectProfiles()
-        {
-            var assembly = Assembly.GetExecutingAssembly();
-            var types = assembly.GetTypes().Where(t => t.Namespace.Contains("ProjectProfiles") && t.IsSubclassOf(typeof(ProjectProfile)));
+            Console.Write("done.");
+            Console.WriteLine();
 
-            return types.Select(t => (ProjectProfile)Activator.CreateInstance(t));
+            return 0;
         }
     }
 }
