@@ -1,9 +1,9 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 14
-VisualStudioVersion = 14.0.25123.0
+# Visual Studio Version 17
+VisualStudioVersion = 17.6.33815.320
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AzureDatabaseDownloader", "AzureDatabaseDownloader\AzureDatabaseDownloader.csproj", "{94F9D503-8809-4741-827E-7D50B0409D97}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AzureDatabaseDownloader", "AzureDatabaseDownloader.csproj", "{C42ED5A6-7B43-4713-9720-0451F210091C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,12 +11,15 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{94F9D503-8809-4741-827E-7D50B0409D97}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{94F9D503-8809-4741-827E-7D50B0409D97}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{94F9D503-8809-4741-827E-7D50B0409D97}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{94F9D503-8809-4741-827E-7D50B0409D97}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C42ED5A6-7B43-4713-9720-0451F210091C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C42ED5A6-7B43-4713-9720-0451F210091C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C42ED5A6-7B43-4713-9720-0451F210091C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C42ED5A6-7B43-4713-9720-0451F210091C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {AFB143C8-2B92-48AE-A48A-7FDC05832208}
 	EndGlobalSection
 EndGlobal

@@ -1,15 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Configuration;
-using System.Data.SqlClient;
-using System.IO;
-using System.Linq;
-using CommandLine;
+﻿using CommandLine;
+using Microsoft.Data.SqlClient;
 using Microsoft.SqlServer.Dac;
+using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AzureDatabaseDownloader
 {
-    class Program
+    internal class Program
     {
         [Verb("interactive", HelpText = "Interactive mode")]
         class InteractiveOptions { }
@@ -24,13 +20,16 @@ namespace AzureDatabaseDownloader
             public string OutputConnectionString { get; set; }
 
             [Option('d', "databases", Required = true, HelpText = "Databases to sync (can be more than 1)", Separator = ',')]
-            public string[] Databases { get; set; }
+            public IEnumerable<string> Databases { get; set; }
 
             [Option('w', "working-dir", Required = false, HelpText = "Working directory (current directory is default)")]
             public string WorkingDirectory { get; set; }
 
             [Option('u', "local-user", Required = false, HelpText = "Local user to give db_owner access after sync")]
             public string LocalUser { get; set; }
+
+            [Option('e', "exclude-tables", Required = false, HelpText = "Tables to exclude from sync", Separator = ',')]
+            public string[]? ExcludeTables { get; set; }
         }
 
         [Verb("db2f", HelpText = "Database-to-file sync (1:1)")]
@@ -41,12 +40,15 @@ namespace AzureDatabaseDownloader
 
             [Option('o', "output-file", Required = true, HelpText = "Output file (.bacpac format)")]
             public string OutputFile { get; set; }
-            
+
             [Option('w', "working-dir", Required = false, HelpText = "Working directory (current directory is default)")]
             public string WorkingDirectory { get; set; }
 
             [Option('d', "database", Required = true, HelpText = "Database to sync")]
             public string Database { get; set; }
+
+            [Option('e', "exclude-tables", Required = false, HelpText = "Tables to exclude from sync", Separator = ',')]
+            public string[]? ExcludeTables { get; set; }
         }
 
         [Verb("f2db", HelpText = "File-to-database sync (1:1)")]
@@ -57,7 +59,7 @@ namespace AzureDatabaseDownloader
 
             [Option('o', "output", Required = true, HelpText = "Output database connection string")]
             public string OutputConnectionString { get; set; }
-            
+
             [Option('w', "working-dir", Required = false, HelpText = "Working directory (current directory is default)")]
             public string WorkingDirectory { get; set; }
 
@@ -119,7 +121,8 @@ namespace AzureDatabaseDownloader
                 OutputConnectionString = selectedProfile.ToConnectionString,
                 Databases = selectedProfile.DatabasesToSync,
                 WorkingDirectory = selectedProfile.WorkingDirectory,
-                LocalUser = selectedProfile.LocalDbUser
+                LocalUser = selectedProfile.LocalDbUser,
+                ExcludeTables = selectedProfile.ExcludeTables,
             });
 
             return 0;
@@ -141,7 +144,8 @@ namespace AzureDatabaseDownloader
                     InputConnectionString = opts.InputConnectionString,
                     Database = db,
                     OutputFile = outputFile,
-                    WorkingDirectory = opts.WorkingDirectory
+                    WorkingDirectory = opts.WorkingDirectory,
+                    ExcludeTables = opts.ExcludeTables
                 });
 
                 FileToDatabaseSync(new F2dbOptions
@@ -183,7 +187,14 @@ namespace AzureDatabaseDownloader
 
             try
             {
-                dac.ExportBacpac(opts.OutputFile, db, DacSchemaModelStorageType.File);
+                List<Tuple<string, string>>? includeTables = null;
+
+                if (opts.ExcludeTables != null)
+                {
+                    includeTables = GetTablesToInclude(opts.InputConnectionString, opts.ExcludeTables);
+                }
+
+                dac.ExportBacpac(opts.OutputFile, db, includeTables);
             }
             catch (DacServicesException dex)
             {
@@ -198,6 +209,34 @@ namespace AzureDatabaseDownloader
             return 0;
         }
 
+        private static List<Tuple<string, string>> GetTablesToInclude(string connectionString, string[] tablesToExclude)
+        {
+            using var connection = new SqlConnection(connectionString);
+
+            connection.Open();
+
+            using var command = new SqlCommand("SELECT * FROM INFORMATION_SCHEMA.TABLES", connection);
+            using var reader = command.ExecuteReader();
+
+            var includeTables = new List<Tuple<string, string>>();
+
+            while (reader.Read())
+            {
+                var schemaName = reader["TABLE_SCHEMA"].ToString();
+                var tableName = reader["TABLE_NAME"].ToString();
+                var tableType = reader["TABLE_TYPE"].ToString();
+
+                if (tableType != "BASE TABLE" || tablesToExclude.Contains($"{schemaName}.{tableName}"))
+                {
+                    continue;
+                }
+
+                includeTables.Add(new(schemaName, tableName));
+            }
+
+            return includeTables;
+        }
+
         private static int FileToDatabaseSync(F2dbOptions opts)
         {
             if (string.IsNullOrEmpty(opts.WorkingDirectory))
@@ -207,11 +246,7 @@ namespace AzureDatabaseDownloader
 
             var db = opts.Database;
             var pk = BacPackage.Load(opts.InputFile);
-            var spec = new DacAzureDatabaseSpecification
-            {
-                Edition = DacAzureEdition.Basic
-            };
-
+          
             using (var sqlConn = new SqlConnection(opts.OutputConnectionString))
             using (var singleUserCmd = new SqlCommand($"IF db_id('{db}') is not null ALTER DATABASE [{db}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE", sqlConn))
             using (var dropCmd = new SqlCommand($"IF db_id('{db}') is not null DROP DATABASE [{db}]", sqlConn))
@@ -225,23 +260,29 @@ namespace AzureDatabaseDownloader
             var local = new DacServices(opts.OutputConnectionString);
             local.ProgressChanged += (sender, eventArgs) => { Console.WriteLine($"[{db}] {eventArgs.Message}"); };
 
+            var spec = new DacAzureDatabaseSpecification
+            {
+                Edition = DacAzureEdition.Default,
+                MaximumSize = 250,
+                ServiceObjective = "S0"
+            };
+
             local.ImportBacpac(pk, db, spec);
 
             if (!string.IsNullOrEmpty(opts.LocalUser))
             {
-                using (var sqlConn = new SqlConnection(opts.OutputConnectionString))
-                using (var loginCmd = new SqlCommand($"USE [{db}]; CREATE USER [{opts.LocalUser}] FOR LOGIN [{opts.LocalUser}]; USE [{db}]; ALTER ROLE [db_owner] ADD MEMBER [{opts.LocalUser}];", sqlConn))
-                {
-                    sqlConn.Open();
+                using var sqlConn = new SqlConnection(opts.OutputConnectionString);
+                using var loginCmd = new SqlCommand($"USE [{db}]; CREATE USER [{opts.LocalUser}] FOR LOGIN [{opts.LocalUser}]; USE [{db}]; ALTER ROLE [db_owner] ADD MEMBER [{opts.LocalUser}];", sqlConn);
 
-                    try
-                    {
-                        loginCmd.ExecuteNonQuery();
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"WARNING: Couldn't add user {opts.LocalUser} because: {ex.Message}");
-                    }
+                sqlConn.Open();
+
+                try
+                {
+                    loginCmd.ExecuteNonQuery();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"WARNING: Couldn't add user {opts.LocalUser} because: {ex.Message}");
                 }
             }
 

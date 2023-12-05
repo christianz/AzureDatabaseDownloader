@@ -21,7 +21,8 @@ Supports exporting/importing multiple databases at a time. Keeps backups of the 
     "workingDirectory":  "C:\\tmp\\Databases", 
     "databasesToSync": [ "test_db" ],
     "localDbUser": "testuser",
-    "isActive": true
+    "isActive": true,
+    "excludeTables": [ "dbo.Tables", "dbo.To", "dbo.Exclude", "(must include schema)" ],
   },
   (...)
 ]

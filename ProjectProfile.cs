@@ -1,12 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 
 namespace AzureDatabaseDownloader
 {
-    public class ProjectProfile
+    internal class ProjectProfile
     {
         private const string ProfilePath = "profiles.json";
 
@@ -17,6 +13,7 @@ namespace AzureDatabaseDownloader
         public string LocalDbUser { get; set; }
         public string WorkingDirectory { get; set; }
         public bool IsActive { get; set; }
+        public string[]? ExcludeTables { get; set; }
 
         public static IEnumerable<ProjectProfile> List()
         {

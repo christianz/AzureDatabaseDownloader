@@ -234,5 +234,5 @@ _Pvt_Extensions
 
 # FAKE - F# Make
 .fake/
-/AzureDatabaseDownloader/ProjectProfiles/*
-AzureDatabaseDownloader/profiles.json
+
+profiles.json

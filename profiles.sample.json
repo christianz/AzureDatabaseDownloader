@@ -1,0 +1,12 @@
+﻿[
+	{
+		"name": "SampleProfile",
+		"fromConnectionString": "Connection string to sync from",
+		"toConnectionString": "Connection string to sync to",
+		"workingDirectory": "A local directory to store database copies",
+		"databasesToSync": [ "SampleDatabase1", "SampleDatabase2" ],
+		"localDbUser": "YourLocalDbUser",
+		"isActive": true,
+		"excludeTables": [ "dbo.Tables", "dbo.To", "dbo.Exclude", "(must include schema)" ],
+	}
+]
