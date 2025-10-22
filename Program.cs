@@ -91,19 +91,32 @@ namespace AzureDatabaseDownloader
 
             Console.WriteLine("Select project profile to run:");
             var i = 1;
+            var letter = 'A';
 
             var profiles = ProjectProfile.List().ToList();
 
             foreach (var p in profiles)
             {
-                Console.WriteLine($"[{i++}] {p.Name}");
+                if (i <= 9)
+                {
+                    Console.WriteLine($"[{i++}] {p.Name}");
+                    continue;
+                }
+
+                Console.WriteLine($"[{letter++}] {p.Name}");
             }
 
             Console.WriteLine($"[{i}] Exit");
 
             var k = Console.ReadKey();
 
-            if (!int.TryParse(k.KeyChar.ToString(), out var selectedIdx))
+            var selectedIdx = 0;
+
+            if (char.IsLetter(k.KeyChar))
+            {
+                selectedIdx = k.KeyChar - 'A' - 22;
+            }
+            else if (!int.TryParse(k.KeyChar.ToString(), out selectedIdx) || selectedIdx == 0)
             {
                 return 0;
             }
