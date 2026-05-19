@@ -6,12 +6,12 @@ namespace AzureDatabaseDownloader
     {
         private const string ProfilePath = "profiles.json";
 
-        public string Name { get; set; }
-        public string FromConnectionString { get; set; }
-        public string ToConnectionString { get; set; }
-        public string[] DatabasesToSync { get; set; }
-        public string LocalDbUser { get; set; }
-        public string WorkingDirectory { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string FromConnectionString { get; set; } = string.Empty;
+        public string ToConnectionString { get; set; } = string.Empty;
+        public string[] DatabasesToSync { get; set; } = [];
+        public string? LocalDbUser { get; set; }
+        public string? WorkingDirectory { get; set; }
         public bool IsActive { get; set; }
         public string[]? ExcludeTables { get; set; }
 
@@ -24,7 +24,8 @@ namespace AzureDatabaseDownloader
 
             var strProfiles = File.ReadAllText(ProfilePath);
 
-            var profiles = JsonConvert.DeserializeObject<List<ProjectProfile>>(strProfiles).Where(p => p.IsActive);
+            var profiles = (JsonConvert.DeserializeObject<List<ProjectProfile>>(strProfiles) ?? [])
+                .Where(p => p.IsActive);
 
             return profiles;
         }
