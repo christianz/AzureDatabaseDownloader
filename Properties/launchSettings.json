@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "AzureDatabaseDownloader-Core": {
+      "commandName": "Project",
+      "commandLineArgs": "interactive"
+    }
+  }
+}

@@ -1,4 +1,5 @@
-﻿using CommandLine;
+﻿using System.Globalization;
+using CommandLine;
 using Microsoft.Data.SqlClient;
 using Microsoft.SqlServer.Dac;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
@@ -72,6 +73,11 @@ namespace AzureDatabaseDownloader
 
         static void Main(string[] args)
         {
+            // DacFx does not support supplemental Windows locales (culture 0x1000).
+            // Force a well-known culture to prevent DacServicesException.
+            CultureInfo.DefaultThreadCurrentCulture = CultureInfo.GetCultureInfo("en-US");
+            CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+
             var parseResult = Parser.Default.ParseArguments<InteractiveOptions, Db2dbOptions, Db2fOptions, F2dbOptions>(args);
 
             parseResult.MapResult(
