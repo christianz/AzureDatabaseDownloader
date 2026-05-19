@@ -1,8 +1,8 @@
-﻿using System.Globalization;
+using System.Data;
+using System.Globalization;
 using CommandLine;
 using Microsoft.Data.SqlClient;
 using Microsoft.SqlServer.Dac;
-using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AzureDatabaseDownloader
 {
@@ -15,19 +15,19 @@ namespace AzureDatabaseDownloader
         class Db2dbOptions
         {
             [Option('i', "input", Required = true, HelpText = "Input database connection string")]
-            public string InputConnectionString { get; set; }
+            public string InputConnectionString { get; set; } = string.Empty;
 
             [Option('o', "output", Required = true, HelpText = "Output database connection string")]
-            public string OutputConnectionString { get; set; }
+            public string OutputConnectionString { get; set; } = string.Empty;
 
             [Option('d', "databases", Required = true, HelpText = "Databases to sync (can be more than 1)", Separator = ',')]
-            public IEnumerable<string> Databases { get; set; }
+            public IEnumerable<string> Databases { get; set; } = [];
 
             [Option('w', "working-dir", Required = false, HelpText = "Working directory (current directory is default)")]
-            public string WorkingDirectory { get; set; }
+            public string? WorkingDirectory { get; set; }
 
             [Option('u', "local-user", Required = false, HelpText = "Local user to give db_owner access after sync")]
-            public string LocalUser { get; set; }
+            public string? LocalUser { get; set; }
 
             [Option('e', "exclude-tables", Required = false, HelpText = "Tables to exclude from sync", Separator = ',')]
             public string[]? ExcludeTables { get; set; }
@@ -37,16 +37,16 @@ namespace AzureDatabaseDownloader
         class Db2fOptions
         {
             [Option('i', "input", Required = true, HelpText = "Input database connection string")]
-            public string InputConnectionString { get; set; }
+            public string InputConnectionString { get; set; } = string.Empty;
 
             [Option('o', "output-file", Required = true, HelpText = "Output file (.bacpac format)")]
-            public string OutputFile { get; set; }
+            public string OutputFile { get; set; } = string.Empty;
 
             [Option('w', "working-dir", Required = false, HelpText = "Working directory (current directory is default)")]
-            public string WorkingDirectory { get; set; }
+            public string? WorkingDirectory { get; set; }
 
             [Option('d', "database", Required = true, HelpText = "Database to sync")]
-            public string Database { get; set; }
+            public string Database { get; set; } = string.Empty;
 
             [Option('e', "exclude-tables", Required = false, HelpText = "Tables to exclude from sync", Separator = ',')]
             public string[]? ExcludeTables { get; set; }
@@ -56,22 +56,22 @@ namespace AzureDatabaseDownloader
         class F2dbOptions
         {
             [Option('i', "input-file", Required = true, HelpText = "Input file (.bacpac format)")]
-            public string InputFile { get; set; }
+            public string InputFile { get; set; } = string.Empty;
 
             [Option('o', "output", Required = true, HelpText = "Output database connection string")]
-            public string OutputConnectionString { get; set; }
+            public string OutputConnectionString { get; set; } = string.Empty;
 
             [Option('w', "working-dir", Required = false, HelpText = "Working directory (current directory is default)")]
-            public string WorkingDirectory { get; set; }
+            public string? WorkingDirectory { get; set; }
 
             [Option('d', "database", Required = true, HelpText = "Database to sync")]
-            public string Database { get; set; }
+            public string Database { get; set; } = string.Empty;
 
             [Option('u', "local-user", Required = false, HelpText = "Local user to give db_owner access after sync")]
-            public string LocalUser { get; set; }
+            public string? LocalUser { get; set; }
         }
 
-        static void Main(string[] args)
+        static int Main(string[] args)
         {
             // DacFx does not support supplemental Windows locales (culture 0x1000).
             // Force a well-known culture to prevent DacServicesException.
@@ -80,7 +80,7 @@ namespace AzureDatabaseDownloader
 
             var parseResult = Parser.Default.ParseArguments<InteractiveOptions, Db2dbOptions, Db2fOptions, F2dbOptions>(args);
 
-            parseResult.MapResult(
+            return parseResult.MapResult(
                 (InteractiveOptions opts) => InteractiveSync(opts),
                 (Db2dbOptions opts) => DatabaseToDatabaseSync(opts),
                 (Db2fOptions opts) => DatabaseToFileSync(opts),
@@ -96,43 +96,33 @@ namespace AzureDatabaseDownloader
             Console.WriteLine();
 
             Console.WriteLine("Select project profile to run:");
-            var i = 1;
-            var letter = 'A';
 
             var profiles = ProjectProfile.List().ToList();
 
-            foreach (var p in profiles)
+            for (var profileIndex = 0; profileIndex < profiles.Count; profileIndex++)
             {
-                if (i <= 9)
-                {
-                    Console.WriteLine($"[{i++}] {p.Name}");
-                    continue;
-                }
-
-                Console.WriteLine($"[{letter++}] {p.Name}");
+                Console.WriteLine($"[{GetProfileSelectionKey(profileIndex)}] {profiles[profileIndex].Name}");
             }
 
-            Console.WriteLine($"[{i}] Exit");
+            Console.WriteLine("[0] Exit");
+            Console.Write("Selection: ");
 
-            var k = Console.ReadKey();
+            var selection = Console.ReadLine();
 
-            var selectedIdx = 0;
-
-            if (char.IsLetter(k.KeyChar))
-            {
-                selectedIdx = k.KeyChar - 'A' - 22;
-            }
-            else if (!int.TryParse(k.KeyChar.ToString(), out selectedIdx) || selectedIdx == 0)
+            if (string.IsNullOrWhiteSpace(selection) || selection.Trim() == "0")
             {
                 return 0;
             }
 
-            if (profiles.Count < selectedIdx)
+            var selectedIdx = ParseProfileSelection(selection, profiles.Count);
+
+            if (selectedIdx == null)
             {
-                return 0;
+                Console.WriteLine("No profile selected.");
+                return 1;
             }
 
-            var selectedProfile = profiles[selectedIdx - 1];
+            var selectedProfile = profiles[selectedIdx.Value];
 
             DatabaseToDatabaseSync(new Db2dbOptions
             {
@@ -145,6 +135,42 @@ namespace AzureDatabaseDownloader
             });
 
             return 0;
+        }
+
+        private static string GetProfileSelectionKey(int profileIndex)
+        {
+            return profileIndex < 9
+                ? (profileIndex + 1).ToString()
+                : ((char)('A' + profileIndex - 9)).ToString();
+        }
+
+        private static int? ParseProfileSelection(string? selection, int profileCount)
+        {
+            selection = selection?.Trim();
+
+            if (string.IsNullOrEmpty(selection))
+            {
+                return null;
+            }
+
+            if (int.TryParse(selection, out var numericSelection)
+                && numericSelection >= 1
+                && numericSelection <= Math.Min(profileCount, 9))
+            {
+                return numericSelection - 1;
+            }
+
+            if (selection.Length == 1 && char.IsLetter(selection[0]))
+            {
+                var selectedIndex = char.ToUpperInvariant(selection[0]) - 'A' + 9;
+
+                if (selectedIndex >= 0 && selectedIndex < profileCount)
+                {
+                    return selectedIndex;
+                }
+            }
+
+            return null;
         }
 
         private static int DatabaseToDatabaseSync(Db2dbOptions opts)
@@ -193,9 +219,9 @@ namespace AzureDatabaseDownloader
             Console.WriteLine($"Fetching {db}...");
             Console.WriteLine();
 
-            var dir = new FileInfo(opts.OutputFile).DirectoryName;
+            var dir = Path.GetDirectoryName(Path.GetFullPath(opts.OutputFile));
 
-            if (!Directory.Exists(dir))
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
             {
                 Directory.CreateDirectory(dir);
             }
@@ -241,9 +267,9 @@ namespace AzureDatabaseDownloader
 
             while (reader.Read())
             {
-                var schemaName = reader["TABLE_SCHEMA"].ToString();
-                var tableName = reader["TABLE_NAME"].ToString();
-                var tableType = reader["TABLE_TYPE"].ToString();
+                var schemaName = Convert.ToString(reader["TABLE_SCHEMA"]) ?? string.Empty;
+                var tableName = Convert.ToString(reader["TABLE_NAME"]) ?? string.Empty;
+                var tableType = Convert.ToString(reader["TABLE_TYPE"]) ?? string.Empty;
 
                 if (tableType != "BASE TABLE" || tablesToExclude.Contains($"{schemaName}.{tableName}"))
                 {
@@ -265,11 +291,16 @@ namespace AzureDatabaseDownloader
 
             var db = opts.Database;
             var pk = BacPackage.Load(opts.InputFile);
-          
+
+            var quotedDatabaseName = QuoteSqlIdentifier(db, nameof(opts.Database));
+
             using (var sqlConn = new SqlConnection(opts.OutputConnectionString))
-            using (var singleUserCmd = new SqlCommand($"IF db_id('{db}') is not null ALTER DATABASE [{db}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE", sqlConn))
-            using (var dropCmd = new SqlCommand($"IF db_id('{db}') is not null DROP DATABASE [{db}]", sqlConn))
+            using (var singleUserCmd = new SqlCommand($"IF DB_ID(@DatabaseName) IS NOT NULL ALTER DATABASE {quotedDatabaseName} SET SINGLE_USER WITH ROLLBACK IMMEDIATE", sqlConn))
+            using (var dropCmd = new SqlCommand($"IF DB_ID(@DatabaseName) IS NOT NULL DROP DATABASE {quotedDatabaseName}", sqlConn))
             {
+                singleUserCmd.Parameters.Add("@DatabaseName", SqlDbType.NVarChar, 128).Value = db;
+                dropCmd.Parameters.Add("@DatabaseName", SqlDbType.NVarChar, 128).Value = db;
+
                 sqlConn.Open();
 
                 singleUserCmd.ExecuteNonQuery();
@@ -290,8 +321,10 @@ namespace AzureDatabaseDownloader
 
             if (!string.IsNullOrEmpty(opts.LocalUser))
             {
+                var quotedLocalUser = QuoteSqlIdentifier(opts.LocalUser, nameof(opts.LocalUser));
+
                 using var sqlConn = new SqlConnection(opts.OutputConnectionString);
-                using var loginCmd = new SqlCommand($"USE [{db}]; CREATE USER [{opts.LocalUser}] FOR LOGIN [{opts.LocalUser}]; USE [{db}]; ALTER ROLE [db_owner] ADD MEMBER [{opts.LocalUser}];", sqlConn);
+                using var loginCmd = new SqlCommand($"USE {quotedDatabaseName}; CREATE USER {quotedLocalUser} FOR LOGIN {quotedLocalUser}; ALTER ROLE [db_owner] ADD MEMBER {quotedLocalUser};", sqlConn);
 
                 sqlConn.Open();
 
@@ -309,6 +342,16 @@ namespace AzureDatabaseDownloader
             Console.WriteLine();
 
             return 0;
+        }
+
+        private static string QuoteSqlIdentifier(string value, string parameterName)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                throw new ArgumentException("SQL identifiers cannot be empty.", parameterName);
+            }
+
+            return $"[{value.Replace("]", "]]")}]";
         }
     }
 }
