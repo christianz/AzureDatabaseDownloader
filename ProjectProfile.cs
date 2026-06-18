@@ -15,6 +15,12 @@ namespace AzureDatabaseDownloader
         public bool IsActive { get; set; }
         public string[]? ExcludeTables { get; set; }
 
+        /// <summary>
+        /// Optional per-database PII anonymization scripts (database name -> .sql path),
+        /// run against the local target immediately after import. Prod is never touched.
+        /// </summary>
+        public Dictionary<string, string>? MaskingScripts { get; set; }
+
         public static IEnumerable<ProjectProfile> List()
         {
             if (!File.Exists(ProfilePath))
