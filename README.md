@@ -50,3 +50,9 @@ AzureDatabaseDownloader db2f -i "server=tcp:mydatabase.database.windows.net,1433
 ```
 AzureDatabaseDownloader f2db -i TestDatabase.bacpac -o "server=tcp:mydatabase.database.windows.net,1433;database=test;uid=test@mydatabase;pwd=MyPassword123;" -d "test_db"
 ```
+
+## PII anonymization
+
+Pass `-m/--masking-script <path>` to `db2db`/`f2db` (or a `maskingScripts` map in a profile)
+to anonymize PII in the local copy immediately after import — production data never lands
+unmasked in non-prod. See [masking/README.md](masking/README.md).
