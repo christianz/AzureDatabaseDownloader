@@ -31,6 +31,12 @@ namespace AzureDatabaseDownloader
 
             [Option('e', "exclude-tables", Required = false, HelpText = "Tables to exclude from sync", Separator = ',')]
             public string[]? ExcludeTables { get; set; }
+
+            [Option('m', "masking-script", Required = false, HelpText = "PII anonymization .sql run against the local target after import (applied to every synced database)")]
+            public string? MaskingScript { get; set; }
+
+            // Per-database masking scripts (database name -> .sql path). Populated from a profile in interactive mode; not a CLI option.
+            public Dictionary<string, string>? MaskingScripts { get; set; }
         }
 
         [Verb("db2f", HelpText = "Database-to-file sync (1:1)")]
@@ -69,6 +75,9 @@ namespace AzureDatabaseDownloader
 
             [Option('u', "local-user", Required = false, HelpText = "Local user to give db_owner access after sync")]
             public string? LocalUser { get; set; }
+
+            [Option('m', "masking-script", Required = false, HelpText = "PII anonymization .sql run against the local target after import")]
+            public string? MaskingScript { get; set; }
         }
 
         static int Main(string[] args)
@@ -132,6 +141,7 @@ namespace AzureDatabaseDownloader
                 WorkingDirectory = selectedProfile.WorkingDirectory,
                 LocalUser = selectedProfile.LocalDbUser,
                 ExcludeTables = selectedProfile.ExcludeTables,
+                MaskingScripts = selectedProfile.MaskingScripts,
             });
 
             return 0;
@@ -193,13 +203,20 @@ namespace AzureDatabaseDownloader
                     ExcludeTables = opts.ExcludeTables
                 });
 
+                // Per-database masking script (interactive/profile) takes precedence over the
+                // single --masking-script applied to all databases.
+                var maskingScript = opts.MaskingScripts != null && opts.MaskingScripts.TryGetValue(db, out var perDb)
+                    ? perDb
+                    : opts.MaskingScript;
+
                 FileToDatabaseSync(new F2dbOptions
                 {
                     InputFile = outputFile,
                     OutputConnectionString = opts.OutputConnectionString,
                     Database = db,
                     LocalUser = opts.LocalUser,
-                    WorkingDirectory = opts.WorkingDirectory
+                    WorkingDirectory = opts.WorkingDirectory,
+                    MaskingScript = maskingScript
                 });
             }
 
@@ -338,10 +355,79 @@ namespace AzureDatabaseDownloader
                 }
             }
 
+            ApplyMaskingScript(opts.OutputConnectionString, db, quotedDatabaseName, opts.MaskingScript, opts.InputFile);
+
             Console.Write("done.");
             Console.WriteLine();
 
             return 0;
+        }
+
+        /// <summary>
+        /// Runs a PII anonymization script against the freshly imported LOCAL database, then
+        /// shreds the intermediate .bacpac so no unmasked production data lingers on disk.
+        /// No-op when no script is supplied. Never touches the source/Azure database.
+        /// </summary>
+        private static void ApplyMaskingScript(string outputConnectionString, string db, string quotedDatabaseName, string? maskingScript, string? bacpacToDelete)
+        {
+            if (string.IsNullOrWhiteSpace(maskingScript))
+            {
+                return;
+            }
+
+            if (!File.Exists(maskingScript))
+            {
+                throw new FileNotFoundException($"Masking script not found: {maskingScript}");
+            }
+
+            Console.WriteLine($"[{db}] Applying masking script {Path.GetFileName(maskingScript)}...");
+
+            var sql = File.ReadAllText(maskingScript);
+
+            using (var conn = new SqlConnection(outputConnectionString))
+            {
+                conn.Open();
+
+                foreach (var batch in SplitOnGo(sql))
+                {
+                    using var cmd = new SqlCommand($"USE {quotedDatabaseName};\n{batch}", conn)
+                    {
+                        CommandTimeout = 0 // masking can touch large tables; no timeout
+                    };
+
+                    cmd.ExecuteNonQuery();
+                }
+            }
+
+            Console.WriteLine($"[{db}] Masking complete");
+
+            // The masked DB is now the source of truth for dev. The raw export still contains
+            // unmasked production data, so delete it.
+            if (!string.IsNullOrEmpty(bacpacToDelete) && File.Exists(bacpacToDelete))
+            {
+                File.Delete(bacpacToDelete);
+                Console.WriteLine($"[{db}] Deleted unmasked export {Path.GetFileName(bacpacToDelete)}");
+            }
+        }
+
+        /// <summary>
+        /// Splits a T-SQL script into batches on lines containing only "GO" (SSMS convention,
+        /// not valid T-SQL). Scripts with no GO separators run as a single batch.
+        /// </summary>
+        private static IEnumerable<string> SplitOnGo(string sql)
+        {
+            var batches = System.Text.RegularExpressions.Regex.Split(
+                sql,
+                @"^\s*GO\s*$",
+                System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            foreach (var batch in batches)
+            {
+                if (!string.IsNullOrWhiteSpace(batch))
+                {
+                    yield return batch;
+                }
+            }
         }
 
         private static string QuoteSqlIdentifier(string value, string parameterName)
