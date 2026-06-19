@@ -21,6 +21,13 @@ namespace AzureDatabaseDownloader
         /// </summary>
         public Dictionary<string, string>? MaskingScripts { get; set; }
 
+        /// <summary>
+        /// Optional stored procedures to EXEC against the local target after import (and after
+        /// any masking script), applied to every database this profile syncs. Each entry runs
+        /// as EXEC &lt;entry&gt;, so it may include arguments, e.g. [ "dbo.MyCleanup @Confirm = 1" ].
+        /// </summary>
+        public string[]? PostImportProcedures { get; set; }
+
         public static IEnumerable<ProjectProfile> List()
         {
             if (!File.Exists(ProfilePath))

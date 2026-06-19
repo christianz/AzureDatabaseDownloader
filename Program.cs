@@ -35,6 +35,11 @@ namespace AzureDatabaseDownloader
             [Option('m', "masking-script", Required = false, HelpText = "PII anonymization .sql run against the local target after import (applied to every synced database)")]
             public string? MaskingScript { get; set; }
 
+            // Project-level stored procedures to EXEC after import, applied to every synced
+            // database. Set from the CLI option or, in interactive mode, from the profile.
+            [Option('p', "post-import-procedures", Required = false, HelpText = "Stored procedures to EXEC against the local target after import (applied to every synced database)", Separator = ';')]
+            public string[]? PostImportProcedures { get; set; }
+
             // Per-database masking scripts (database name -> .sql path). Populated from a profile in interactive mode; not a CLI option.
             public Dictionary<string, string>? MaskingScripts { get; set; }
         }
@@ -78,6 +83,9 @@ namespace AzureDatabaseDownloader
 
             [Option('m', "masking-script", Required = false, HelpText = "PII anonymization .sql run against the local target after import")]
             public string? MaskingScript { get; set; }
+
+            [Option('p', "post-import-procedures", Required = false, HelpText = "Stored procedures to EXEC against the local target after import", Separator = ';')]
+            public string[]? PostImportProcedures { get; set; }
         }
 
         static int Main(string[] args)
@@ -142,6 +150,7 @@ namespace AzureDatabaseDownloader
                 LocalUser = selectedProfile.LocalDbUser,
                 ExcludeTables = selectedProfile.ExcludeTables,
                 MaskingScripts = selectedProfile.MaskingScripts,
+                PostImportProcedures = selectedProfile.PostImportProcedures,
             });
 
             return 0;
@@ -216,7 +225,9 @@ namespace AzureDatabaseDownloader
                     Database = db,
                     LocalUser = opts.LocalUser,
                     WorkingDirectory = opts.WorkingDirectory,
-                    MaskingScript = maskingScript
+                    MaskingScript = maskingScript,
+                    // Project-level procedures apply to every synced database.
+                    PostImportProcedures = opts.PostImportProcedures
                 });
             }
 
@@ -355,7 +366,16 @@ namespace AzureDatabaseDownloader
                 }
             }
 
-            ApplyMaskingScript(opts.OutputConnectionString, db, quotedDatabaseName, opts.MaskingScript, opts.InputFile);
+            var masked = ApplyMaskingScript(opts.OutputConnectionString, db, quotedDatabaseName, opts.MaskingScript);
+            var ranProcedures = ApplyPostImportProcedures(opts.OutputConnectionString, db, quotedDatabaseName, opts.PostImportProcedures);
+
+            // If any sanitizing step ran, shred the raw export so unmasked/unpurged source
+            // data does not linger on disk.
+            if ((masked || ranProcedures) && !string.IsNullOrEmpty(opts.InputFile) && File.Exists(opts.InputFile))
+            {
+                File.Delete(opts.InputFile);
+                Console.WriteLine($"[{db}] Deleted raw export {Path.GetFileName(opts.InputFile)}");
+            }
 
             Console.Write("done.");
             Console.WriteLine();
@@ -364,15 +384,14 @@ namespace AzureDatabaseDownloader
         }
 
         /// <summary>
-        /// Runs a PII anonymization script against the freshly imported LOCAL database, then
-        /// shreds the intermediate .bacpac so no unmasked production data lingers on disk.
-        /// No-op when no script is supplied. Never touches the source/Azure database.
+        /// Runs a PII anonymization script against the freshly imported LOCAL database.
+        /// No-op (returns false) when no script is supplied. Never touches the source database.
         /// </summary>
-        private static void ApplyMaskingScript(string outputConnectionString, string db, string quotedDatabaseName, string? maskingScript, string? bacpacToDelete)
+        private static bool ApplyMaskingScript(string outputConnectionString, string db, string quotedDatabaseName, string? maskingScript)
         {
             if (string.IsNullOrWhiteSpace(maskingScript))
             {
-                return;
+                return false;
             }
 
             if (!File.Exists(maskingScript))
@@ -400,14 +419,44 @@ namespace AzureDatabaseDownloader
             }
 
             Console.WriteLine($"[{db}] Masking complete");
+            return true;
+        }
 
-            // The masked DB is now the source of truth for dev. The raw export still contains
-            // unmasked production data, so delete it.
-            if (!string.IsNullOrEmpty(bacpacToDelete) && File.Exists(bacpacToDelete))
+        /// <summary>
+        /// EXECs the configured stored procedures against the freshly imported LOCAL database,
+        /// after any masking. Each entry is run as "EXEC &lt;entry&gt;" so it may include arguments
+        /// (e.g. "dbo.MyCleanup @Confirm = 1"). Returns false when none are supplied. Never
+        /// touches the source database.
+        /// </summary>
+        private static bool ApplyPostImportProcedures(string outputConnectionString, string db, string quotedDatabaseName, string[]? procedures)
+        {
+            if (procedures == null || procedures.Length == 0)
             {
-                File.Delete(bacpacToDelete);
-                Console.WriteLine($"[{db}] Deleted unmasked export {Path.GetFileName(bacpacToDelete)}");
+                return false;
             }
+
+            using var conn = new SqlConnection(outputConnectionString);
+            conn.Open();
+
+            foreach (var proc in procedures)
+            {
+                if (string.IsNullOrWhiteSpace(proc))
+                {
+                    continue;
+                }
+
+                Console.WriteLine($"[{db}] Running post-import procedure: EXEC {proc}");
+
+                using var cmd = new SqlCommand($"USE {quotedDatabaseName};\nEXEC {proc};", conn)
+                {
+                    CommandTimeout = 0 // a purge/cleanup proc can touch large tables; no timeout
+                };
+
+                cmd.ExecuteNonQuery();
+            }
+
+            Console.WriteLine($"[{db}] Post-import procedures complete");
+            return true;
         }
 
         /// <summary>

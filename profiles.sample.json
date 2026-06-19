@@ -10,6 +10,7 @@
 		"excludeTables": [ "dbo.Tables", "dbo.To", "dbo.Exclude", "(must include schema)" ],
 		"maskingScripts": {
 			"SampleDatabase1": "path/to/anonymize-SampleDatabase1.sql"
-		}
+		},
+		"postImportProcedures": [ "dbo.MyCleanupProc @Confirm = 1" ]
 	}
 ]
