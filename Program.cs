@@ -20,7 +20,7 @@ namespace AzureDatabaseDownloader
             [Option('o', "output", Required = true, HelpText = "Output database connection string")]
             public string OutputConnectionString { get; set; } = string.Empty;
 
-            [Option('d', "databases", Required = true, HelpText = "Databases to sync (can be more than 1)", Separator = ',')]
+            [Option('d', "databases", Required = true, HelpText = "Databases to sync (can be more than 1). Use \"source:destination\" to restore under a different name, e.g. \"MyDb:MyDb_Local\"", Separator = ',')]
             public IEnumerable<string> Databases { get; set; } = [];
 
             [Option('w', "working-dir", Required = false, HelpText = "Working directory (current directory is default)")]
@@ -29,8 +29,10 @@ namespace AzureDatabaseDownloader
             [Option('u', "local-user", Required = false, HelpText = "Local user to give db_owner access after sync")]
             public string? LocalUser { get; set; }
 
-            [Option('e', "exclude-tables", Required = false, HelpText = "Tables to exclude from sync", Separator = ',')]
-            public string[]? ExcludeTables { get; set; }
+            // Sequence options must be IEnumerable<T> rather than T[]: CommandLineParser 2.9.1
+            // throws when it defaults an omitted sequence option whose property type is not generic.
+            [Option('e', "exclude-tables", Required = false, HelpText = "Tables to exclude from sync (must include schema, e.g. \"dbo.Logs\")", Separator = ',')]
+            public IEnumerable<string>? ExcludeTables { get; set; }
 
             [Option('m', "masking-script", Required = false, HelpText = "PII anonymization .sql run against the local target after import (applied to every synced database)")]
             public string? MaskingScript { get; set; }
@@ -38,7 +40,7 @@ namespace AzureDatabaseDownloader
             // Project-level stored procedures to EXEC after import, applied to every synced
             // database. Set from the CLI option or, in interactive mode, from the profile.
             [Option('p', "post-import-procedures", Required = false, HelpText = "Stored procedures to EXEC against the local target after import (applied to every synced database)", Separator = ';')]
-            public string[]? PostImportProcedures { get; set; }
+            public IEnumerable<string>? PostImportProcedures { get; set; }
 
             // Per-database masking scripts (database name -> .sql path). Populated from a profile in interactive mode; not a CLI option.
             public Dictionary<string, string>? MaskingScripts { get; set; }
@@ -59,8 +61,10 @@ namespace AzureDatabaseDownloader
             [Option('d', "database", Required = true, HelpText = "Database to sync")]
             public string Database { get; set; } = string.Empty;
 
-            [Option('e', "exclude-tables", Required = false, HelpText = "Tables to exclude from sync", Separator = ',')]
-            public string[]? ExcludeTables { get; set; }
+            // Must be IEnumerable<T> rather than T[]: CommandLineParser 2.9.1 throws when it
+            // defaults an omitted sequence option whose property type is not generic.
+            [Option('e', "exclude-tables", Required = false, HelpText = "Tables to exclude from sync (must include schema, e.g. \"dbo.Logs\")", Separator = ',')]
+            public IEnumerable<string>? ExcludeTables { get; set; }
         }
 
         [Verb("f2db", HelpText = "File-to-database sync (1:1)")]
@@ -75,7 +79,7 @@ namespace AzureDatabaseDownloader
             [Option('w', "working-dir", Required = false, HelpText = "Working directory (current directory is default)")]
             public string? WorkingDirectory { get; set; }
 
-            [Option('d', "database", Required = true, HelpText = "Database to sync")]
+            [Option('d', "database", Required = true, HelpText = "Database to create on the output server (does not have to match the name the .bacpac was exported from)")]
             public string Database { get; set; } = string.Empty;
 
             [Option('u', "local-user", Required = false, HelpText = "Local user to give db_owner access after sync")]
@@ -84,8 +88,9 @@ namespace AzureDatabaseDownloader
             [Option('m', "masking-script", Required = false, HelpText = "PII anonymization .sql run against the local target after import")]
             public string? MaskingScript { get; set; }
 
+            // IEnumerable<T> rather than T[]: see the note on Db2dbOptions.ExcludeTables.
             [Option('p', "post-import-procedures", Required = false, HelpText = "Stored procedures to EXEC against the local target after import", Separator = ';')]
-            public string[]? PostImportProcedures { get; set; }
+            public IEnumerable<string>? PostImportProcedures { get; set; }
         }
 
         static int Main(string[] args)
@@ -141,17 +146,26 @@ namespace AzureDatabaseDownloader
 
             var selectedProfile = profiles[selectedIdx.Value];
 
+            Console.WriteLine();
+            Console.WriteLine($"Syncing profile '{selectedProfile.Name}':");
+
+            foreach (var db in selectedProfile.DatabasesToSync)
+            {
+                Console.WriteLine($"  {db}");
+            }
+
+            Console.WriteLine();
+
             DatabaseToDatabaseSync(new Db2dbOptions
             {
                 InputConnectionString = selectedProfile.FromConnectionString,
                 OutputConnectionString = selectedProfile.ToConnectionString,
-                Databases = selectedProfile.DatabasesToSync,
                 WorkingDirectory = selectedProfile.WorkingDirectory,
                 LocalUser = selectedProfile.LocalDbUser,
                 ExcludeTables = selectedProfile.ExcludeTables,
                 MaskingScripts = selectedProfile.MaskingScripts,
                 PostImportProcedures = selectedProfile.PostImportProcedures,
-            });
+            }, selectedProfile.DatabasesToSync);
 
             return 0;
         }
@@ -194,19 +208,38 @@ namespace AzureDatabaseDownloader
 
         private static int DatabaseToDatabaseSync(Db2dbOptions opts)
         {
+            List<DatabaseSyncItem> databases;
+
+            try
+            {
+                databases = opts.Databases.Select(DatabaseSyncItem.Parse).ToList();
+            }
+            catch (ArgumentException ex)
+            {
+                Console.Error.WriteLine($"ERROR: {ex.Message}");
+                return 1;
+            }
+
+            return DatabaseToDatabaseSync(opts, databases);
+        }
+
+        private static int DatabaseToDatabaseSync(Db2dbOptions opts, IEnumerable<DatabaseSyncItem> databases)
+        {
             if (string.IsNullOrEmpty(opts.WorkingDirectory))
             {
                 opts.WorkingDirectory = Environment.CurrentDirectory;
             }
 
-            foreach (var db in opts.Databases)
+            foreach (var db in databases)
             {
-                var outputFile = Path.Combine(opts.WorkingDirectory, $"{db}.bacpac");
+                // The .bacpac is a copy of the source, so it keeps the source name even when the
+                // destination database is named differently.
+                var outputFile = Path.Combine(opts.WorkingDirectory, $"{db.Source}.bacpac");
 
                 DatabaseToFileSync(new Db2fOptions
                 {
                     InputConnectionString = opts.InputConnectionString,
-                    Database = db,
+                    Database = db.Source,
                     OutputFile = outputFile,
                     WorkingDirectory = opts.WorkingDirectory,
                     ExcludeTables = opts.ExcludeTables
@@ -214,15 +247,13 @@ namespace AzureDatabaseDownloader
 
                 // Per-database masking script (interactive/profile) takes precedence over the
                 // single --masking-script applied to all databases.
-                var maskingScript = opts.MaskingScripts != null && opts.MaskingScripts.TryGetValue(db, out var perDb)
-                    ? perDb
-                    : opts.MaskingScript;
+                var maskingScript = ResolveMaskingScript(opts.MaskingScripts, db) ?? opts.MaskingScript;
 
                 FileToDatabaseSync(new F2dbOptions
                 {
                     InputFile = outputFile,
                     OutputConnectionString = opts.OutputConnectionString,
-                    Database = db,
+                    Database = db.Destination,
                     LocalUser = opts.LocalUser,
                     WorkingDirectory = opts.WorkingDirectory,
                     MaskingScript = maskingScript,
@@ -232,6 +263,28 @@ namespace AzureDatabaseDownloader
             }
 
             return 0;
+        }
+
+        /// <summary>
+        /// Finds the per-database masking script for a database being synced. Keyed on the source
+        /// name first (the script is written against the source schema), falling back to the
+        /// destination name so a renamed database still gets masked either way it was configured.
+        /// </summary>
+        private static string? ResolveMaskingScript(Dictionary<string, string>? maskingScripts, DatabaseSyncItem db)
+        {
+            if (maskingScripts == null)
+            {
+                return null;
+            }
+
+            if (maskingScripts.TryGetValue(db.Source, out var bySource))
+            {
+                return bySource;
+            }
+
+            return maskingScripts.TryGetValue(db.Destination, out var byDestination)
+                ? byDestination
+                : null;
         }
 
         private static int DatabaseToFileSync(Db2fOptions opts)
@@ -262,7 +315,8 @@ namespace AzureDatabaseDownloader
             {
                 List<Tuple<string, string>>? includeTables = null;
 
-                if (opts.ExcludeTables != null)
+                // CommandLineParser hands back an empty sequence (not null) when -e is omitted.
+                if (opts.ExcludeTables?.Any() == true)
                 {
                     includeTables = GetTablesToInclude(opts.InputConnectionString, opts.ExcludeTables);
                 }
@@ -282,8 +336,10 @@ namespace AzureDatabaseDownloader
             return 0;
         }
 
-        private static List<Tuple<string, string>> GetTablesToInclude(string connectionString, string[] tablesToExclude)
+        private static List<Tuple<string, string>> GetTablesToInclude(string connectionString, IEnumerable<string> tablesToExclude)
         {
+            var excluded = new HashSet<string>(tablesToExclude, StringComparer.Ordinal);
+
             using var connection = new SqlConnection(connectionString);
 
             connection.Open();
@@ -299,7 +355,7 @@ namespace AzureDatabaseDownloader
                 var tableName = Convert.ToString(reader["TABLE_NAME"]) ?? string.Empty;
                 var tableType = Convert.ToString(reader["TABLE_TYPE"]) ?? string.Empty;
 
-                if (tableType != "BASE TABLE" || tablesToExclude.Contains($"{schemaName}.{tableName}"))
+                if (tableType != "BASE TABLE" || excluded.Contains($"{schemaName}.{tableName}"))
                 {
                     continue;
                 }
@@ -318,6 +374,10 @@ namespace AzureDatabaseDownloader
             }
 
             var db = opts.Database;
+
+            Console.WriteLine($"Restoring {Path.GetFileName(opts.InputFile)} into {db}...");
+            Console.WriteLine();
+
             var pk = BacPackage.Load(opts.InputFile);
 
             var quotedDatabaseName = QuoteSqlIdentifier(db, nameof(opts.Database));
@@ -428,9 +488,10 @@ namespace AzureDatabaseDownloader
         /// (e.g. "dbo.MyCleanup @Confirm = 1"). Returns false when none are supplied. Never
         /// touches the source database.
         /// </summary>
-        private static bool ApplyPostImportProcedures(string outputConnectionString, string db, string quotedDatabaseName, string[]? procedures)
+        private static bool ApplyPostImportProcedures(string outputConnectionString, string db, string quotedDatabaseName, IEnumerable<string>? procedures)
         {
-            if (procedures == null || procedures.Length == 0)
+            // CommandLineParser hands back an empty sequence (not null) when -p is omitted.
+            if (procedures?.Any(p => !string.IsNullOrWhiteSpace(p)) != true)
             {
                 return false;
             }

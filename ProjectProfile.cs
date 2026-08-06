@@ -9,7 +9,7 @@ namespace AzureDatabaseDownloader
         public string Name { get; set; } = string.Empty;
         public string FromConnectionString { get; set; } = string.Empty;
         public string ToConnectionString { get; set; } = string.Empty;
-        public string[] DatabasesToSync { get; set; } = [];
+        public DatabaseSyncItem[] DatabasesToSync { get; set; } = [];
         public string? LocalDbUser { get; set; }
         public string? WorkingDirectory { get; set; }
         public bool IsActive { get; set; }
